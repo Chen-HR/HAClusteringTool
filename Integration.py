@@ -1,237 +1,367 @@
 import numpy # numpy-1.26.0
 
 # Calculate the distance between two points
-distance = lambda point1, point2: float(numpy.linalg.norm(numpy.array(point1) - numpy.array(point2)))
+def calculate_distance(point1: tuple, point2: tuple) -> float:
+  """Calculate the distance between two points using `numpy.linalg.norm`
+
+  ### Parameters
+  - `point1` (tuple): The coordinates of the first point.
+  - `point2` (tuple): The coordinates of the second point.
+
+  ### Returns
+  - `float`: The Euclidean distance between the two points.
+  """
+  return float(numpy.linalg.norm(numpy.array(point1) - numpy.array(point2)))
+
 # Calculate the center point of a cluster
-center = lambda cluster: tuple(numpy.array([sum(vL) for vL in numpy.transpose(numpy.array(list(cluster)))]) / len(cluster))
+def calculate_center(cluster: set[tuple]) -> tuple[tuple]:
+  """Calculate the center point of a cluster
 
-def integration_V1_universal(points: list, rule, point=lambda point: point) -> list[tuple]:
-  """merge adjacent points into one point
+  ### Parameters
+  - `cluster` (set[tuple]): A set of points representing the cluster.
 
-    1. Iterate through each point in the input list
-    2. Check if the point belongs to any existing cluster based on the rule
-    3. If the point does not belong to any cluster, create a new cluster
-    4. If the point belongs to multiple clusters, merge those clusters
-    5. Calculate the center point as the average of its points
-
-  Args:
-      points (list): Coordinate points to be processed
-      rule (_type_): lambda
-      point (_type_, optional): method to get coordinates. Defaults to `lambda point: point`.
-
-  Returns:
-      list[tuple]: Merged coordinates
+  ### Returns
+  - `tuple`: The center point coordinates of the cluster.
   """
-  clusters: list[set] = []
+  return tuple(numpy.array([sum(vL) for vL in numpy.transpose(numpy.array(list(cluster)))]) / len(cluster))
+
+# def calculate_center_of_gravity(weighted_dict: dict) -> tuple:
+#   """Calculate the center of gravity for a set of weighted points.
+
+#   ### Parameters
+#   - `weighted_dict` (dict): A dictionary where keys are points (tuples) and values are weights.
+
+#   ### Returns
+#   - `tuple`: The center of gravity coordinates.
+#   """
+#   total_weight = sum(weighted_dict.values())
+#   center_coordinates = [0] * len(next(iter(weighted_dict.keys())))
+#   for point, weight in weighted_dict.items():
+#     for i, coordinate in enumerate(point):
+#       center_coordinates[i] += coordinate * (weight / total_weight)
+#   return tuple(center_coordinates)
+
+class Integration:
+
+  @staticmethod
+  def merge_associated_clusters(clusters: list[set]) -> list[set]: 
+    """Merges associated clusters within a list of sets.
+
+    ### Parameters
+    - `clusters` (list[set]): A list of sets representing clusters.
+
+    ### Returns
+    - `list[set]`: A list of sets with associated clusters merged.
+    """
+    merged = True
+    while merged:
+      merged = False
+      for i in range(len(clusters)):
+        for j in range(i+1, len(clusters)):
+          if not clusters[i].isdisjoint(clusters[j]):
+            clusters[i] |= clusters.pop(j)
+            merged = True
+            break
+        if merged: break
+    return clusters
+
   
-  for i in range(len(points)):
-    for j in range(i+1, len(points)):
-      # Join or add a new cluster
-      if rule(points[i], points[j]):
-        clustered = False
-        newCluster = {point(points[i]), point(points[j])}
-        # Join cluster
-        for cluster in clusters:
-          if not cluster.isdisjoint(newCluster):
-            cluster |= newCluster
-            clustered = True
-            break  # Exit the loop after merging the cluster
-        # Add a new cluster
-        if not clustered:
-          clusters.append(newCluster)
+  @staticmethod
+  def V1_universal(points: list, rule, associated: list[tuple[tuple]] | None = None) -> list[set]:
+    """Perform universal clustering on a list of points based on a given clustering rule.
 
-  # Merge associated clusters
-  i = 0
-  while i < len(clusters):
-    j = i + 1
-    while j < len(clusters):
-      if clusters[i].isdisjoint(clusters[j]):
-        j += 1
-      else:
-        clusters[i] |= clusters.pop(j)
-    i += 1
+    This algorithm performs universal clustering on a list of points based on a given clustering rule. It allows for
+    the specification of an initial set of associated clusters or creates one if not provided. The algorithm iterates
+    through all pairs of points and merges clusters if they satisfy the provided clustering rule. Finally, the 
+    associated clusters are merged using the 'Integration.merge_associated_clusters' method.
 
-  # Calculate the center point for each cluster
-  return [center(cluster) for cluster in clusters if cluster]
+    Ensure that the length of 'points' and 'associated' lists is the same. The clustering rule should be a boolean
+    function determining whether two points should be clustered together.
 
-def integration_V2_1(points: list[tuple], limit: float | int, scaling: float | int) -> list[tuple]:
-  """Integration and filtering of detection points
+    ### Parameters
+    - `points` (list): A list of points represented as tuples.
+    - `rule` (_type_): A clustering rule that defines whether two points should be grouped together. Should be a boolean function, which receives two points (p1, p2), as `lambda p1, p2: ......`.
+    - as`sociated (list[tuple[tuple]] | None, optional): A list of associated clusters. Default is None.
 
-    1. Generate weighted virtual points
-      1.1. Position: midpoint between two points
-      1.2. Weight: log⁡(1/(𝑑/𝑟))
-        1.2.1. 𝑑 : distance between two points
-        1.2.2. 𝑟: distance limitation coefficient
-    2. Generate virtual point clusters using existing virtual points as reference targets
-      2.1. Point cluster: The weight of the generated virtual points is greater than 0, and the distance between virtual points is less than α𝑟
-        2.1.1. α	distance limit scaling factor
-    3. Merge virtual point cluster to generate merged points
+    ### Exception
+    - `ValueError`: If the length of 'points' and 'associated' lists are not the same.
 
-  Args:
-      points (list[tuple]): Coordinate points to be processed
-      limit (float | int): distance limitation coefficient
-      scaling (float | int): distance limit scaling factor
+    ### Returns
+    - `list[set]`: A list of clusters, where each cluster is represented as a set of tuples.
 
-  Returns:
-      list[tuple]: Merged coordinates
-  """
+    ### Example Usage
+    ```python
+    # Example Usage
+    points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
+    rule = lambda p1, p2: abs(p1[0] - p2[0]) <= 1 and abs(p1[1] - p2[1]) <= 1
+    clusters = V1_universal(points, rule)
+    ```
+    """
+    # 1. Create a list of associated clusters from `points` if `associated` is not provided
+    if associated is None: 
+      associated = [tuple((point, )) for point in points]
+
+    # 2. Throw an exception `ValueError` if the length of 'points' and 'associated' lists are not the same.
+    if len(points) != len(associated): 
+      raise ValueError("points and associated must be the same length")
+
+    # 3. Iterate over all point pairs to build clusters based on the provided clustering rules.
+    clusters: list[set] = [set(associated[i]) | set(associated[j]) for i in range(len(points)) for j in range(i+1, len(points)) if rule(points[i], points[j])]
+
+    # 4. Merge associated clusters using the 'Integration.merge_associated_clusters' method, and return it result.
+    return Integration.merge_associated_clusters(clusters)
+
+  @staticmethod
+  def V1(points: list[tuple], limit: float | int) -> list[set[tuple]]:
+    """Perform clustering on a list of points based on a distance limit.
+
+    This method performs clustering on a list of points based on a given distance limit. It uses the Euclidean distance
+    between points to determine whether two points should be grouped together. The clusters are formed by iterating
+    through all pairs of points and merging clusters if the distance between them is less than the provided limit.
+    Finally, the associated clusters are merged using the 'Integration.merge_associated_clusters' method.
+
+    ### Parameters
+    - `points` (list[tuple]): A list of points represented as tuples.
+    - `limit` (float | int): The distance limit to form clusters. Points within this distance will be grouped together.
+
+    ### Returns
+    - `list[set[tuple]]`: A list of clusters, where each cluster is represented as a set of tuples.
+
+    ### Example Usage
+    ```python
+    # Example Usage
+    points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
+    limit = 1.5
+    clusters = Integration.V1(points, limit)
+    ```
+    """
+    return Integration.V1_universal(points, lambda point1, point2: calculate_distance(point1, point2) < limit)
+
   class VirtualPoint:
+    """
+    The `VirtualPoint` class represents weighted virtual points between two given points.
+
+    ### Attributes:
+    - `point`: Tuple representing the position of the virtual point (midpoint between two input points).
+    - `weight`: Weight of the virtual point calculated using the formula log(1/(𝑑/𝑟)), where 𝑑 is the distance between two points and 𝑟 is the distance limitation coefficient.
+
+    ### Methods:
+    - `__init__(self, point1: tuple, point2: tuple, limit: float)`: Initializes a VirtualPoint instance.
+      - `point1`: Tuple representing the coordinates of the first point.
+      - `point2`: Tuple representing the coordinates of the second point.
+      - `limit`: Distance limitation coefficient (𝑟).
+
+    ### Example Usage:
+    ```python
+    # Example Usage
+    point1 = (0, 0)
+    point2 = (1, 1)
+    limit = 2.0
+    virtual_point = VirtualPoint(point1, point2, limit)
+    print(virtual_point.point)   # Output: (0.5, 0.5)
+    print(virtual_point.weight)  # Output: 0.707107
+    ```
+
+    ### Explanation:
+    - The `point` attribute is the midpoint between `point1` and `point2`.
+    - The `weight` attribute is calculated using the formula log(1/(𝑑/𝑟)), where 𝑑 is the distance between `point1` and `point2`.
+    - The `__init__` method initializes the virtual point based on the provided points and distance limitation coefficient.
+    """
+
     def __init__(self, point1: tuple, point2: tuple, limit: float):
+      """Initializes a VirtualPoint instance.
+
+      Parameters:
+      - `point1`: Tuple representing the coordinates of the first point.
+      - `point2`: Tuple representing the coordinates of the second point.
+      - `limit`: Distance limitation coefficient (𝑟).
+      """
       self.sources = (numpy.array(point1), numpy.array(point2))
-      # 1.1. Position: midpoint between two points
-      self.point = tuple((self.sources[0] + self.sources[1])/2)
-      # 1.2. Weight: log⁡(1/(𝑑/𝑟))
-      #   1.2.1. 𝑑 : distance between two points
-      #   1.2.2. 𝑟: distance limitation coefficient
-      self.weight = numpy.log(1/(numpy.linalg.norm(self.sources[0]- self.sources[1])/limit))
-  # 1. Generate weighted virtual points # NOTE: not full
-  virtualPoints: list[VirtualPoint] = [VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i+1, len(points))]
-  # 2. Generate virtual point clusters using existing virtual points as reference targets
-  # 3. Merge virtual point cluster to generate merged points
-  virtualClusterCenters = integration_V1_universal(virtualPoints, lambda point1, point2: point1.weight>0 and point2.weight>0 and distance(point1.point, point2.point) < scaling*limit, lambda virtualPoint: virtualPoint.point)
-  return virtualClusterCenters
+      self.point = tuple((self.sources[0] + self.sources[1]) / 2)
+      self.weight = numpy.log(1 / (numpy.linalg.norm(self.sources[0] - self.sources[1]) / limit))
+      self.sources = (point1, point2)  # Note: This line seems redundant; it assigns the original tuple values again.
 
-def integration_V2_2(points: list[tuple], limit: float | int, scaling: float | int) -> list[tuple]:
-  """Integration and filtering of detection points
+  def V2_1(points: list[tuple], limit: float | int, scaling: float | int = 0.8, useVirtualPoint: bool = False) -> list[set[VirtualPoint | tuple]]:
+    """Perform clustering on a list of points based on weighted virtual points with a distance limit.
 
-    1. Generate weighted virtual points
-      1.1. Position: midpoint between two points
-      1.2. Weight: log⁡(1/(𝑑/𝑟))
-        1.2.1. 𝑑 : distance between two points
-        1.2.2. 𝑟: distance limitation coefficient
-    2. Generate point clusters using existing virtual points as reference targets
-      2.1. Point clusters: The weight of the generated virtual points is greater than 0, and the distance between virtual points is less than α𝑟
-        2.1.1. α	distance limit scaling factor
-    3. Merge point clusters to generate merged points
+    This method extends the V1 algorithm by introducing weighted virtual points. Each pair of points generates a virtual
+    point with a weight based on the distance between the original points. Clustering is performed on these virtual points
+    using the provided clustering rule. The resulting clusters are then merged based on the 'Integration.merge_associated_clusters'
+    method.
 
-  Args:
-      points (list[tuple]): Coordinate points to be processed
-      limit (float | int): distance limitation coefficient
-      scaling (float | int): distance limit scaling factor
+    ### Parameters
+    - `points` (list[tuple]): A list of points represented as tuples.
+    - `limit` (float | int): The distance limit to form clusters. Points within this distance will be grouped together.
+    - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
+    - `useVirtualPoint` (bool, optional): If True, return `list[set[VirtualPoint]]`; if False, return `list[set[tuple]]`. Default is False.
 
-  Returns:
-      list[tuple]: Merged coordinates
-  """
-  class VirtualPoint:
-    def __init__(self, point1: tuple, point2: tuple, limit: float):
-      self.sources = (numpy.array(point1), numpy.array(point2))
-      # 1.1. Position: midpoint between two points
-      self.point = tuple((self.sources[0] + self.sources[1])/2)
-      # 1.2. Weight: log⁡(1/(𝑑/𝑟))
-      #   1.2.1. 𝑑 : distance between two points
-      #   1.2.2. 𝑟: distance limitation coefficient
-      self.weight = numpy.log(1/(numpy.linalg.norm(self.sources[0]- self.sources[1])/limit))
-      self.sources = (tuple(self.sources[0]), tuple(self.sources[1]))
-  # 1. Generate weighted virtual points
-  virtualPoints: list[VirtualPoint] = [VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i+1, len(points))]
-  # 2. Generate point clusters using existing virtual points as reference targets
-  clusters: list[set] = []
-  for i in range(len(virtualPoints)):
-    for j in range(i+1, len(virtualPoints)):
+    ### Returns
+    - `list[set[VirtualPoint]]`: A list of clusters, where each cluster is represented as a set of VirtualPoint.
 
-      # Join or add a new cluster
-      if virtualPoints[i].weight>0 and virtualPoints[j].weight>0 and distance(virtualPoints[i].point, virtualPoints[j].point) < scaling*limit:
-        clustered = False
-        newCluster = set(virtualPoints[i].sources) | set(virtualPoints[j].sources)
-        # Join cluster
-        for cluster in clusters:
-          if cluster.isdisjoint(newCluster):
-            cluster |= newCluster
-            clustered = True
-        # Add a new cluster
-        if not clustered:
-          clusters.append(newCluster)
+    ### Example Usage
+    ```python
+    # Example Usage
+    points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
+    limit = 1.5
+    clusters = Integration.V2_1(points, limit)
+    ```
+    """
+    if useVirtualPoint:
+      # Generate weighted virtual points
+      virtualPoints: list[Integration.VirtualPoint] = [Integration.VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i+1, len(points))]
+      # Generate and return virtual point clusters using existing virtual points as reference targets
+      return Integration.V1_universal(virtualPoints, lambda point1, point2: point1.weight>0 and point2.weight>0 and calculate_distance(point1.point, point2.point) < scaling*limit)
+    else:
+      # Generate weighted virtual points
+      virtualPoints: list[tuple] = [virtualPoint.point for virtualPoint in [Integration.VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i+1, len(points))] if virtualPoint.weight>0]
+      # Generate and return virtual point clusters using existing virtual points as reference targets
+      return Integration.V1(virtualPoints, scaling*limit)
 
-      # Merge associated clusters
-      i = 0
-      while i < len(clusters):
-        j = i + 1
-        while j < len(clusters):
-          if clusters[i].isdisjoint(clusters[j]):
-            j += 1
-          else:
-            clusters[i] |= clusters.pop(j)
-        i += 1
-  # 3. Merge point clusters to generate merged points
-  return [center(cluster) for cluster in clusters]
+  def V2_2(points: list[tuple], limit: float | int, scaling: float | int = 0.8) -> list[set[tuple]]:
+    """Perform clustering on a list of points based on weighted virtual points with a distance limit, and return source clusters.
 
-def integration_V2_3(points: list[tuple], limit: float | int, scaling: float | int) -> list[tuple]:
-  """Integration and filtering of detection points
+    This method extends the V1 algorithm by introducing weighted virtual points. Each pair of points generates a virtual
+    point with a weight based on the distance between the original points. Clustering is performed on these virtual points
+    using the provided clustering rule. The resulting clusters are then merged based on the 'Integration.merge_associated_clusters'
+    method. This method returns the source clusters of the virtual points.
 
-    1. Generate weighted virtual points
-      1.1. Position: midpoint between two points
-      1.2. Weight: log⁡(1/(𝑑/𝑟))
-        1.2.1. 𝑑 : distance between two points
-        1.2.2. 𝑟 : distance limitation coefficient
-    2. Generate point clusters using existing virtual points as reference targets
-      2.1. Point cluster: The weight of the generated virtual points is greater than 0, and the distance between virtual points is less than α𝑟
-        2.1.1. α	distance limit scaling factor
-    3. The virtual point weights within each point cluster are synthesized into each point weight.
-      3.1. Weight: virtual point weight average
-    4. Calculate the center of gravity of each point cluster
+    ### Parameters
+    - `points` (list[tuple]): A list of points represented as tuples.
+    - `limit` (float | int): The distance limit to form clusters. Points within this distance will be grouped together.
+    - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
 
-  Args:
-      points (list[tuple]): Coordinate points to be processed
-      limit (float | int): distance limitation coefficient
-      scaling (float | int): distance limit scaling factor
+    ### Returns
+    - `list[set[tuple]]`: A list of clusters, where each cluster is represented as a set of tuples. Each tuple in a cluster represents the source points of a virtual point.
 
-  Returns:
-      list[tuple]: Merged coordinates
-  """
-  class VirtualPoint:
-    def __init__(self, point1: tuple, point2: tuple, limit: float):
-      self.sources = (numpy.array(point1), numpy.array(point2))
-      # 1.1. Position: midpoint between two points
-      self.point = tuple((self.sources[0] + self.sources[1])/2)
-      # 1.2. Weight: log⁡(1/(𝑑/𝑟))
-      #   1.2.1. 𝑑 : distance between two points
-      #   1.2.2. 𝑟: distance limitation coefficient
-      self.weight = numpy.log(1/(numpy.linalg.norm(self.sources[0]- self.sources[1])/limit))
-      self.sources = (tuple(self.sources[0]), tuple(self.sources[1]))
-  # 1. Generate weighted virtual points
-  virtualPoints: list[VirtualPoint] = [VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i+1, len(points))]
-  # 2. Generate point clusters using existing virtual points as reference targets
-  clusters: list[set] = []
-  for i in range(len(virtualPoints)):
-    for j in range(i+1, len(virtualPoints)):
+    ### Example Usage
+    ```python
+    # Example Usage
+    points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
+    limit = 1.5
+    source_clusters = Integration.V2_2(points, limit)
+    ```
+    """
+    # Generate weighted virtual points
+    virtualPoints: list[Integration.VirtualPoint] = [Integration.VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i+1, len(points))]
+    # Generate and return virtual point source clusters using existing virtual points as reference targets
+    return Integration.V1_universal(virtualPoints, lambda point1, point2: point1.weight>0 and point2.weight>0 and calculate_distance(point1.point, point2.point) < scaling*limit, [virtualPoint.sources for virtualPoint in virtualPoints])
 
-      # Join or add a new cluster
-      if virtualPoints[i].weight>0 and virtualPoints[j].weight>0 and distance(virtualPoints[i].point, virtualPoints[j].point) < scaling*limit:
-        clustered = False
-        newCluster = set(virtualPoints[i].sources) | set(virtualPoints[j].sources)
-        # Join cluster
-        for cluster in clusters:
-          if cluster.isdisjoint(newCluster):
-            cluster |= newCluster
-            clustered = True
-        # Add a new cluster
-        if not clustered:
-          clusters.append(newCluster)
+  def V2(points: list[tuple], limit: float | int, scaling: float | int = 0.8, useSource: bool = True, useVirtualPoint: bool = False) -> list[set[VirtualPoint | tuple]]:
+    """Perform clustering on a list of points based on weighted virtual points with a distance limit.
 
-      # Merge associated clusters
-      i = 0
-      while i < len(clusters):
-        j = i + 1
-        while j < len(clusters):
-          if clusters[i].isdisjoint(clusters[j]):
-            j += 1
-          else:
-            clusters[i] |= clusters.pop(j)
-        i += 1
-  # 3. The virtual point weights within each point cluster are synthesized into each point weight.
-  weightClusters = []
-  for cluster in clusters:
-    cluster_list = list(cluster)
-    weighted_dict = {}
-    for i in range(len(cluster_list)):
-      weighted_dict[cluster_list[i]] = sum([VirtualPoint(cluster_list[i], cluster_list[j], limit).weight for j in range(len(cluster)) if i != j]) / len(cluster)
-    weightClusters.append(weighted_dict)
-  # 4. Calculate the center of gravity of each point cluster
-  def calculate_center_of_gravity(weighted_dict):
-    total_weight = sum(weighted_dict.values())
-    center_coordinates = [0] * len(next(iter(weighted_dict.keys())))
-    for point, weight in weighted_dict.items():
-      for i, coordinate in enumerate(point):
-        center_coordinates[i] += coordinate * (weight / total_weight)
-    return tuple(center_coordinates)
-  return [calculate_center_of_gravity(wp) for wp in weightClusters]
+    This method extends the V1 algorithm by introducing weighted virtual points. Each pair of points generates a virtual
+    point with a weight based on the distance between the original points. Clustering is performed on these virtual points
+    using the provided clustering rule. The resulting clusters are then merged based on the 'Integration.merge_associated_clusters'
+    method. This method returns either the virtual point clusters or the source clusters of the virtual points based on the
+    'useSource' parameter.
+
+    ### Parameters
+    - `points` (list[tuple]): A list of points represented as tuples.
+    - `limit` (float | int): The distance limit to form clusters. Points within this distance will be grouped together.
+    - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
+    - `useSource` (bool, optional): If True, return source clusters (like `V2_2`); if False, return virtual point clusters (like `V2_1`). Default is True.
+    - `useVirtualPoint` (bool, optional): If True, return `list[set[VirtualPoint]]`; if False, return `list[set[tuple]]`. Default is False.
+
+    ### Returns
+    - `list[set[VirtualPoint | tuple]]`: A list of clusters, where each cluster is represented as a set of `tuple` or `VirtualPoint`. It is the parameter "useSource" that determines whether the elements in each cluster are virtual points or source points. The type that determines the data in each virtual point cluster is "useVirtualPoint".
+
+    ### Example Usage
+    ```python
+    # Example Usage
+    points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
+    limit = 1.5
+    clusters = Integration.V2(points, limit)
+    ```
+    """
+    if useSource:
+      return Integration.V2_2(points, limit, scaling)
+    else:
+      return Integration.V2_1(points, limit, scaling, useVirtualPoint)
+
+  # def integration_V2_3(points: list[tuple], limit: float | int, scaling: float | int) -> list[tuple]: # TODO rewrite to `Calculate center point`(reference the weight of `virtual point`)
+  #   """Integration and filtering of detection points
+
+  #     1. Generate weighted virtual points
+  #       1.1. Position: midpoint between two points
+  #       1.2. Weight: log⁡(1/(𝑑/𝑟))
+  #         1.2.1. 𝑑 : distance between two points
+  #         1.2.2. 𝑟 : distance limitation coefficient
+  #     2. Generate point clusters using existing virtual points as reference targets
+  #       2.1. Point cluster: The weight of the generated virtual points is greater than 0, and the distance between virtual points is less than α𝑟
+  #         2.1.1. α	distance limit scaling factor
+  #     3. The virtual point weights within each point cluster are synthesized into each point weight.
+  #       3.1. Weight: virtual point weight average
+  #     4. Calculate the center of gravity of each point cluster
+
+  #   Args:
+  #       points (list[tuple]): Coordinate points to be processed
+  #       limit (float | int): distance limitation coefficient
+  #       scaling (float | int): distance limit scaling factor
+
+  #   Returns:
+  #       list[tuple]: Merged coordinates
+  #   """
+  #   # Generate weighted virtual points
+  #   virtualPoints: list[Integration.VirtualPoint] = [Integration.VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i+1, len(points))]
+
+  #   # 2. Generate point clusters using existing virtual points as reference targets
+  #   clusters: list[set] = []
+  #   for i in range(len(virtualPoints)):
+  #     for j in range(i+1, len(virtualPoints)):
+
+  #       # Join or add a new cluster
+  #       if virtualPoints[i].weight>0 and virtualPoints[j].weight>0 and distance(virtualPoints[i].point, virtualPoints[j].point) < scaling*limit:
+  #         clustered = False
+  #         newCluster = set(virtualPoints[i].sources) | set(virtualPoints[j].sources)
+  #         # Join cluster
+  #         for cluster in clusters:
+  #           if cluster.isdisjoint(newCluster):
+  #             cluster |= newCluster
+  #             clustered = True
+  #         # Add a new cluster
+  #         if not clustered:
+  #           clusters.append(newCluster)
+
+  #       # Merge associated clusters
+  #       clusters = Integration.merge_associated_clusters(clusters)
+  #   # 3. The virtual point weights within each point cluster are synthesized into each point weight.
+  #   weightClusters = []
+  #   for cluster in clusters:
+  #     cluster_list = list(cluster)
+  #     weighted_dict = {}
+  #     for i in range(len(cluster_list)):
+  #       weighted_dict[cluster_list[i]] = sum([Integration.VirtualPoint(cluster_list[i], cluster_list[j], limit).weight for j in range(len(cluster)) if i != j]) / len(cluster)
+  #     weightClusters.append(weighted_dict)
+  #   # 4. Calculate the center of gravity of each point cluster
+  #   def calculate_center_of_gravity(weighted_dict):
+  #     total_weight = sum(weighted_dict.values())
+  #     center_coordinates = [0] * len(next(iter(weighted_dict.keys())))
+  #     for point, weight in weighted_dict.items():
+  #       for i, coordinate in enumerate(point):
+  #         center_coordinates[i] += coordinate * (weight / total_weight)
+  #     return tuple(center_coordinates)
+  #   return [calculate_center_of_gravity(wp) for wp in weightClusters]
+
+def main():
+  # Example usage
+  dispersion = 10
+  size = 1000
+  concentrated = 10
+  concentrated_distance = 2
+
+  point_list = [tuple(point) for point in list(numpy.transpose([numpy.random.uniform(-size, size, dispersion), numpy.random.uniform(-size, size, dispersion), numpy.random.uniform(-size, size, dispersion)])) + list(numpy.random.uniform(-size, size, 3) + numpy.transpose([numpy.random.uniform(-concentrated_distance, concentrated_distance, concentrated), numpy.random.uniform(-concentrated_distance, concentrated_distance, concentrated), numpy.random.uniform(-concentrated_distance, concentrated_distance, concentrated)]))]
+  distance_limitation_coefficient = concentrated_distance
+
+  print("point_list:", point_list)
+  print()
+  print("Cluster Centers (Integration.V1      ):", [calculate_center(cluster) for cluster in Integration.V1(point_list, distance_limitation_coefficient) if cluster])
+  print()
+  print("Cluster Centers (Integration.V2_1    ):", [calculate_center(cluster) for cluster in Integration.V2_1(point_list, distance_limitation_coefficient, useVirtualPoint=False) if cluster])
+  print("Cluster Centers (Integration.V2(V2_1)):", [calculate_center(cluster) for cluster in Integration.V2(point_list, distance_limitation_coefficient, useSource=False, useVirtualPoint=False) if cluster])
+  print()
+  print("Cluster Centers (Integration.V2_2    ):", [calculate_center(cluster) for cluster in Integration.V2_2(point_list, distance_limitation_coefficient) if cluster])
+  print("Cluster Centers (Integration.V2(V2_2)):", [calculate_center(cluster) for cluster in Integration.V2(point_list, distance_limitation_coefficient, useSource=True) if cluster])
+  print()
+
+if __name__ == "__main__":
+  main()
