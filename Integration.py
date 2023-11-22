@@ -335,8 +335,40 @@ def clustering(points: list[tuple], limit: float | int, useVirtualPoints: bool =
     return clustering_V2(points, limit, scaling, useSource, returnVirtualPoint, withWeight, weight)
   else:
     return clustering_V1(points, limit)
+def pairing(clusters: list[set[tuple]], limit: float | int, useVirtualPoints: bool = False, scaling: float | int = 0.8, useSource: bool = True, withWeight: bool = False, weight = None) -> list[tuple[set[tuple], list[int]]]:
+  """Pair clusters based on a distance limit, considering either source points or virtual points.
 
-# def pairing(clusters: list[set[tuple]], ):
+  This function pairs clusters based on the provided distance limit. It uses the `clustering` function to perform
+  clustering either with source points (V1) or virtual points (V2), depending on the `useVirtualPoints` parameter.
+  The resulting pairs are represented as tuples, where the first element is the paired cluster and the second
+  element is a list of indices indicating which original clusters contributed to the pair.
+
+  ### Parameters
+  - `clusters` (list[set[tuple]]): A list of clusters to pair.
+  - `limit` (float | int): The distance limit to form pairs. Clusters within this distance will be paired together.
+  - `useVirtualPoints` (bool, optional): If True, use V2 algorithm with virtual points; if False, use V1 algorithm with source points. Default is False.
+  - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
+  - `useSource` (bool, optional): If True, use source clusters in pairing; if False, use virtual point clusters. Default is True.
+  - `withWeight` (bool, optional): If True, include weights in the result; if False, return pairs without weights. Default is False.
+  - `weight` (callable, optional): A function for calculating weights. If None, use the default `calculate_weight` function.
+
+  ### Returns
+  - `list[tuple[set[tuple], list[int]]]`: A list of pairs, where each pair is represented as a tuple containing a paired cluster and a list of indices indicating which original clusters contributed to the pair.
+
+  ### Example Usage
+  ```python
+  # Example Usage
+  clusters = [{(0, 0), (1, 1)}, {(2, 2), (5, 5)}, {(6, 6)}]
+  limit = 2.0
+  paired_clusters = pairing(clusters, limit, useVirtualPoints=True, useSource=False, withWeight=True)
+  ```
+  """
+  # Merge clusters into pairs
+  pairs: list[set[tuple]] = clustering(list(set().union(*clusters)), limit, useVirtualPoints=useVirtualPoints, scaling=scaling, useSource=useSource, withWeight=withWeight, weight=weight)
+  # Find the indices of clusters that contributed to each pair
+  pairs_from: list[list[int]] = [[j for j in range(len(clusters)) if not pairs[i].isdisjoint(clusters[j])] for i in range(len(pairs))]
+  return [(pairs[i], pairs_from[i]) for i in range(len(pairs))]
+
 
 def main():
   # Example usage
@@ -347,24 +379,32 @@ def main():
 
   point_list = [tuple(point) for point in list(numpy.transpose([numpy.random.uniform(-size, size, dispersion), numpy.random.uniform(-size, size, dispersion), numpy.random.uniform(-size, size, dispersion)])) + list(numpy.random.uniform(-size, size, 3) + numpy.transpose([numpy.random.uniform(-concentrated_distance, concentrated_distance, concentrated), numpy.random.uniform(-concentrated_distance, concentrated_distance, concentrated), numpy.random.uniform(-concentrated_distance, concentrated_distance, concentrated)]))]
   distance_limitation_coefficient = concentrated_distance
+  cluster: list[list[tuple]] = []
 
   print("point_list:", point_list)
   print()
-  print("Cluster Centers (clustering_V1      ):", [calculate_center(cluster) for cluster in clustering_V1(point_list, distance_limitation_coefficient) if cluster])
-  print("Cluster Centers (clustering         ):", [calculate_center(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=False) if cluster])
+  print("clustering_V1: ")
+  print("  Cluster Centers (clustering_V1  ):", [calculate_center(cluster) for cluster in clustering_V1(point_list, distance_limitation_coefficient) if cluster])
+  print("  Cluster Centers (clustering     ):", [calculate_center(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=False) if cluster])
+  cluster.append([calculate_center(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=False) if cluster])
+  print("clustering_V2_1: ")
+  print("  Cluster Centers (clustering_V2_1):", [calculate_center(cluster) for cluster in clustering_V2_1(point_list, distance_limitation_coefficient, returnVirtualPoint=False) if cluster])
+  print("  Cluster Centers (clustering_V2  ):", [calculate_center(cluster) for cluster in clustering_V2(point_list, distance_limitation_coefficient, useSource=False, returnVirtualPoint=False) if cluster])
+  print("  Cluster Centers (clustering     ):", [calculate_center(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=False, returnVirtualPoint=False) if cluster])
+  cluster.append([calculate_center(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=False, returnVirtualPoint=False) if cluster])
+  print("clustering_V2_2: ")
+  print("  Cluster Centers (clustering_V2_2):", [calculate_center(cluster) for cluster in clustering_V2_2(point_list, distance_limitation_coefficient) if cluster])
+  print("  Cluster Centers (clustering_V2  ):", [calculate_center(cluster) for cluster in clustering_V2(point_list, distance_limitation_coefficient, useSource=True) if cluster])
+  print("  Cluster Centers (clustering     ):", [calculate_center(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True) if cluster])
+  cluster.append([calculate_center(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True) if cluster])
+  print("clustering_V2_2: ")
+  print("  Cluster Centers (clustering_V2_2):", [calculate_center_of_gravity(cluster) for cluster in clustering_V2_2(point_list, distance_limitation_coefficient, withWeight=True) if cluster])
+  print("  Cluster Centers (clustering_V2  ):", [calculate_center_of_gravity(cluster) for cluster in clustering_V2(point_list, distance_limitation_coefficient, useSource=True, withWeight=True) if cluster])
+  print("  Cluster Centers (clustering     ):", [calculate_center_of_gravity(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True, withWeight=True) if cluster])
+  cluster.append([calculate_center_of_gravity(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True, withWeight=True) if cluster])
   print()
-  print("Cluster Centers (clustering_V2_1    ):", [calculate_center(cluster) for cluster in clustering_V2_1(point_list, distance_limitation_coefficient, returnVirtualPoint=False) if cluster])
-  print("Cluster Centers (clustering_V2(V2_1)):", [calculate_center(cluster) for cluster in clustering_V2(point_list, distance_limitation_coefficient, useSource=False, returnVirtualPoint=False) if cluster])
-  print("Cluster Centers (clustering(V2_1)   ):", [calculate_center(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=False, returnVirtualPoint=False) if cluster])
-  print()
-  print("Cluster Centers (clustering_V2_2    ):", [calculate_center(cluster) for cluster in clustering_V2_2(point_list, distance_limitation_coefficient) if cluster])
-  print("Cluster Centers (clustering_V2(V2_2)):", [calculate_center(cluster) for cluster in clustering_V2(point_list, distance_limitation_coefficient, useSource=True) if cluster])
-  print("Cluster Centers (clustering(V2_2)   ):", [calculate_center(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True) if cluster])
-  print()
-  print("Cluster Centers (clustering_V2_2    ):", [calculate_center_of_gravity(cluster) for cluster in clustering_V2_2(point_list, distance_limitation_coefficient, withWeight=True) if cluster])
-  print("Cluster Centers (clustering_V2(V2_2)):", [calculate_center_of_gravity(cluster) for cluster in clustering_V2(point_list, distance_limitation_coefficient, useSource=True, withWeight=True) if cluster])
-  print("Cluster Centers (clustering(V2_2)   ):", [calculate_center_of_gravity(cluster) for cluster in clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True, withWeight=True) if cluster])
-  print()
+  print("cluster:", cluster)
+  print("pairing:", pairing(cluster, distance_limitation_coefficient))
 
 if __name__ == "__main__":
   main()
