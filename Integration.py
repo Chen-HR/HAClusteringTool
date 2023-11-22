@@ -1,4 +1,39 @@
-import numpy # numpy-1.26.0
+"""
+# Integration.py Documentation
+
+## Overview
+
+The "Integration.py" file provides a collection of functions for clustering and pairing operations based on distance limits and weighted virtual points. The functions support both source points (V1 algorithm) and virtual points (V2 algorithm), offering flexibility in clustering strategies.
+
+## Functions
+
+### `clustering`
+
+```python
+def clustering(points: list[tuple], limit: float | int, useVirtualPoints: bool = False, scaling: float | int = 0.8, useSource: bool = True, returnVirtualPoint: bool = False, withWeight: bool = False, weight = None) -> list[set[VirtualPoint | tuple]]:
+```
+
+### `pairing`
+
+```python
+def pairing(clusters: list[set[tuple]], limit: float | int, useVirtualPoints: bool = False, scaling: float | int = 0.8, useSource: bool = True, withWeight: bool = False, weight = None) -> list[tuple[set[tuple], list[int]]]:
+```
+
+### Other Clustering Functions
+
+Several other functions are available for specific clustering scenarios, including variations of the V1 and V2 algorithms, as well as functions for calculating distances, centers, weights, and merging associated clusters.
+
+## Notes
+
+- Ensure that the required dependencies, such as `numpy`, are installed for proper functioning.
+- Review the provided example usage for better understanding and application in specific scenarios.
+
+---
+
+Feel free to customize the documentation further based on additional details or specific use cases for your functions.
+"""
+
+import numpy
 
 def calculate_distance(point1: tuple, point2: tuple) -> float:
   """Calculate the distance between two points using `numpy.linalg.norm`
@@ -32,7 +67,6 @@ def calculate_center_of_gravity(weighted_cluster: dict) -> tuple:
   ### Returns
   - `tuple`: The center of gravity coordinates.
   """
-  total_weight = sum(weighted_cluster.values())
   center_coordinates = [0] * len(next(iter(weighted_cluster.keys())))
   for point, weight in weighted_cluster.items():
     for i, coordinate in enumerate(point):
@@ -255,9 +289,7 @@ def clustering_V2_2(points: list[tuple], limit: float | int, scaling: float | in
   # Generate weighted virtual points
   virtualPoints: list[VirtualPoint] = [VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i + 1, len(points))]
   # Generate and return virtual point source clusters using existing virtual points as reference targets
-  clusters = clustering_V1_universal(virtualPoints,
-                                     lambda point1, point2: point1.weight > 0 and point2.weight > 0 and calculate_distance(point1.point, point2.point) < scaling * limit,
-                                     [virtualPoint.sources for virtualPoint in virtualPoints])
+  clusters = clustering_V1_universal(virtualPoints, lambda point1, point2: point1.weight > 0 and point2.weight > 0 and calculate_distance(point1.point, point2.point) < scaling * limit, [virtualPoint.sources for virtualPoint in virtualPoints])
   if withWeight:
     if weight is None:
       weight = calculate_weight
