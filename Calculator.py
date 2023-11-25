@@ -1,6 +1,11 @@
 import numpy
 
-import Object
+try:
+  import Object
+except ModuleNotFoundError:
+  from Integration import Object
+  version = 1.0
+  
 
 def distance(point1: tuple, point2: tuple) -> float:
   """Calculate the distance between two points using `numpy.linalg.norm`

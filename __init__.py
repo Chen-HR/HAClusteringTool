@@ -1,9 +1,9 @@
 """
-# Integration.py Documentation
+# Integration
 
 ## Overview
 
-The "Integration.py" file provides a collection of functions for clustering and pairing operations based on distance limits and weighted virtual points. The functions support both source points (V1 algorithm) and virtual points (V2 algorithm), offering flexibility in clustering strategies.
+The "Integration" package provides a collection of functions for clustering and pairing operations based on distance limits and weighted virtual points. The functions support both source points (V1 algorithm) and virtual points (V2 algorithm), offering flexibility in clustering strategies.
 
 ## Functions
 
@@ -35,10 +35,14 @@ Feel free to customize the documentation further based on additional details or 
 
 import numpy
 
-import Object
-import Calculator
-__all__ = ["Object", "Calculator"]
-version = 1.0
+try:
+  import Object
+  import Calculator
+except ModuleNotFoundError:
+  from Integration import Object
+  from Integration import Calculator
+  __all__ = ["Object", "Calculator"]
+  version = 1.0
 
 def merge_associated_clusters(clusters: list[set]) -> list[set]: 
   """Merges associated clusters within a list of sets.
