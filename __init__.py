@@ -278,17 +278,17 @@ def clustering(points: list[tuple], limit: float | int, useVirtualPoints: bool =
     return clustering_V2(points, limit, scaling, useSource, returnVirtualPoint, withWeight, weight)
   else:
     return clustering_V1(points, limit)
-def pairing(clusters: list[set[tuple]], limit: float | int, useVirtualPoints: bool = False, scaling: float | int = 0.8, useSource: bool = True, withWeight: bool = False, weight = None) -> list[tuple[set[tuple], list[int]]]:
-  """Pair clusters based on a distance limit, considering either source points or virtual points.
 
-  This function pairs clusters based on the provided distance limit. It uses the `clustering` function to perform
-  clustering either with source points (V1) or virtual points (V2), depending on the `useVirtualPoints` parameter.
-  The resulting pairs are represented as tuples, where the first element is the paired cluster and the second
-  element is a list of indices indicating which original clusters contributed to the pair.
+def pairing(clusters: list[set[tuple]], limit: float | int, withSource: bool = False, useVirtualPoints: bool = False, scaling: float | int = 0.8, useSource: bool = True, withWeight: bool = False, weight = None) -> list[set[tuple]] | list[tuple[set[tuple], list[int]]]:
+  """Pair clusters based on a distance limit.
+
+  This method pairs clusters from the input list based on a given distance limit. It uses the `clustering` function to form clusters from the union of points in the input clusters. 
+  The pairs are either returned directly or with additional information about the indices of clusters that contributed to each pair.
 
   ### Parameters
   - `clusters` (list[set[tuple]]): A list of clusters to pair.
   - `limit` (float | int): The distance limit to form pairs. Clusters within this distance will be paired together.
+  - `withSource` (bool, optional): If True, return pairs with source cluster indices; if False, return pairs without source cluster indices. Default is False.
   - `useVirtualPoints` (bool, optional): If True, use V2 algorithm with virtual points; if False, use V1 algorithm with source points. Default is False.
   - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
   - `useSource` (bool, optional): If True, use source clusters in pairing; if False, use virtual point clusters. Default is True.
@@ -296,7 +296,7 @@ def pairing(clusters: list[set[tuple]], limit: float | int, useVirtualPoints: bo
   - `weight` (callable, optional): A function for calculating weights. If None, use the default `Calculator.weight` function.
 
   ### Returns
-  - `list[tuple[set[tuple], list[int]]]`: A list of pairs, where each pair is represented as a tuple containing a paired cluster and a list of indices indicating which original clusters contributed to the pair.
+  - `list[set[tuple]]` or `list[tuple[set[tuple], list[int]]]`: A list of pairs, where each pair is represented as a set of tuples. If 'withSource' is True, each pair is accompanied by a list of indices indicating the contributing clusters.
 
   ### Example Usage
   ```python
@@ -308,9 +308,12 @@ def pairing(clusters: list[set[tuple]], limit: float | int, useVirtualPoints: bo
   """
   # Merge clusters into pairs
   pairs: list[set[tuple]] = clustering(list(set().union(*clusters)), limit, useVirtualPoints=useVirtualPoints, scaling=scaling, useSource=useSource, withWeight=withWeight, weight=weight)
-  # Find the indices of clusters that contributed to each pair
-  pairs_from: list[list[int]] = [[j for j in range(len(clusters)) if not pairs[i].isdisjoint(clusters[j])] for i in range(len(pairs))]
-  return [(pairs[i], pairs_from[i]) for i in range(len(pairs))]
+  if withSource == False:
+    return pairs
+  else:
+    # Find the indices of clusters that contributed to each pair
+    pairs_from: list[list[int]] = [[j for j in range(len(clusters)) if not pairs[i].isdisjoint(clusters[j])] for i in range(len(pairs))]
+    return [(pairs[i], pairs_from[i]) for i in range(len(pairs))]
 
 
 if __name__ == "__main__":
@@ -347,4 +350,4 @@ if __name__ == "__main__":
   cluster.append(Calculator.cluster_centers_of_gravity(clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True, withWeight=True)))
   print()
   print("cluster:", cluster)
-  print("pairing:", pairing(cluster, distance_limitation_coefficient))
+  print("pairing:", pairing(cluster, distance_limitation_coefficient, True))
