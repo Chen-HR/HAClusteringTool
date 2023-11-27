@@ -39,8 +39,8 @@ try:
   import Object
   import Calculator
 except ModuleNotFoundError:
-  from Integration import Object
-  from Integration import Calculator
+  from IntegrationTool import Object
+  from IntegrationTool import Calculator
   __all__ = ["Object", "Calculator"]
   version = 1.0
 

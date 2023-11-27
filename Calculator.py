@@ -3,7 +3,7 @@ import numpy
 try:
   import Object
 except ModuleNotFoundError:
-  from Integration import Object
+  from IntegrationTool import Object
   version = 1.0
   
 
