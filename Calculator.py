@@ -3,7 +3,7 @@ import numpy
 try:
   import Object
 except ModuleNotFoundError:
-  from IntegrationTool import Object
+  from HAClusteringTool import Object
   version = 1.0
   
 
@@ -39,10 +39,21 @@ def center_of_gravity(weighted_cluster: dict) -> tuple:
   ### Returns
   - `tuple`: The center of gravity coordinates.
   """
+  if not weighted_cluster:
+    raise ValueError("The weighted_cluster dictionary is empty.")
+  
+  # Remove points with negative weights
+  weighted_cluster = {point: weight for point, weight in weighted_cluster.items() if weight > 0}
+
+  total_weight = sum(weighted_cluster.values())
+  if total_weight == 0:
+    raise ZeroDivisionError("Total weight in the cluster is zero. Cannot calculate center of gravity.")
+
   center_coordinates = [0] * len(next(iter(weighted_cluster.keys())))
   for point, weight in weighted_cluster.items():
     for i, coordinate in enumerate(point):
-      center_coordinates[i] += coordinate * (weight / sum(weighted_cluster.values()))
+      center_coordinates[i] += coordinate * (weight / total_weight)
+
   return tuple(center_coordinates)
 
 def weight(cluster: set[tuple], point: tuple, limit: float | int) -> float:

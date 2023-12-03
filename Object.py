@@ -1,5 +1,11 @@
 import numpy
 
+try:
+  import Calculator
+except ModuleNotFoundError:
+  from HAClusteringTool import Calculator
+  version = 1.0
+
 class VirtualPoint:
   """
   The `VirtualPoint` class represents weighted virtual points between two given points.
@@ -41,5 +47,7 @@ class VirtualPoint:
     """
     self.sources = (numpy.array(point1), numpy.array(point2))
     self.point = tuple((self.sources[0] + self.sources[1]) / 2)
-    self.weight = numpy.log(1 / (numpy.linalg.norm(self.sources[0] - self.sources[1]) / limit))
+    # self.weight = numpy.log(1 / (numpy.linalg.norm(self.sources[0] - self.sources[1]) / limit))
+    distance = Calculator.distance(point1, point2)
+    self.weight = numpy.log(1 / (distance / limit))
     self.sources = (point1, point2)  # Note: This line seems redundant; it assigns the original tuple values again.

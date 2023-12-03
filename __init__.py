@@ -39,8 +39,8 @@ try:
   import Object
   import Calculator
 except ModuleNotFoundError:
-  from IntegrationTool import Object
-  from IntegrationTool import Calculator
+  from HAClusteringTool import Object
+  from HAClusteringTool import Calculator
   __all__ = ["Object", "Calculator"]
   version = 1.0
 
