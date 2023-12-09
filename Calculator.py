@@ -1,79 +1,100 @@
+# .\Calculator.py
+
 import numpy
 
 try:
+  from . import Object
+except ImportError:
   import Object
-except ModuleNotFoundError:
-  from HAClusteringTool import Object
-  version = 1.0
-  
+
+def merge_associated_clusters(clusters: list[set]) -> list[set]: 
+  """Merges associated clusters within a list of sets.
+  ### Parameters:
+  - `clusters` (list[set]): List of clusters to merge.
+  ### Returns:
+  - `list[set]`: List of merged clusters.
+  """
+  merged = True
+  while merged:
+    merged = False
+    for i in range(len(clusters)):
+      for j in range(i+1, len(clusters)):
+        if not clusters[i].isdisjoint(clusters[j]):
+          clusters[i] |= clusters.pop(j)
+          merged = True
+          break
+      if merged: break
+  return clusters
 
 def distance(point1: tuple, point2: tuple) -> float:
-  """Calculate the distance between two points using `numpy.linalg.norm`
-
-  ### Parameters
-  - `point1` (tuple): The coordinates of the first point.
-  - `point2` (tuple): The coordinates of the second point.
-
-  ### Returns
-  - `float`: The Euclidean distance between the two points.
+  """Scale the coordinates of a point by a given factor.
+  ### Parameters:
+  - `point` (tuple): Coordinates of the point.
+  - `scaling` (int | float): Scaling factor.
+  ### Returns:
+  - `tuple`: Scaled coordinates of the point.
   """
   return float(numpy.linalg.norm(numpy.array(point1) - numpy.array(point2)))
 
-def center(cluster: set[tuple]) -> tuple[tuple]:
-  """Calculate the center point of a cluster
+def scaling(point: tuple, scaling: int | float) -> tuple:
+  """Scale the coordinates of a point by a given factor.
+  ### Parameters:
+  - `point` (tuple): Coordinates of the point.
+  - `scaling` (int | float): Scaling factor.
+  ### Returns:
+  - `tuple`: Scaled coordinates of the point.
+  """
+  return tuple(v * scaling for v in point)
 
-  ### Parameters
-  - `cluster` (set[tuple]): A set of points representing the cluster.
-
-  ### Returns
-  - `tuple`: The center point coordinates of the cluster.
+def center(cluster: list[tuple]) -> tuple:
+  """Calculate the center point of a cluster.
+  ### Parameters:
+  - `cluster` (list[tuple]): List of coordinates representing a cluster.
+  ### Returns:
+  - `tuple`: Coordinates of the cluster center.
   """
   return tuple(numpy.array([sum(vL) for vL in numpy.transpose(numpy.array(list(cluster)))]) / len(cluster))
 
-def center_of_gravity(weighted_cluster: dict) -> tuple:
+def center_of_gravity(weighted_cluster: list[tuple]) -> tuple:
   """Calculate the center of gravity for a set of weighted points.
-
-  ### Parameters
-  - `weighted_dict` (dict): A dictionary where keys are points (tuples) and values are weights.
-
-  ### Returns
-  - `tuple`: The center of gravity coordinates.
+  ### Parameters:
+  - `weighted_cluster` (list[tuple]): List of tuples where each tuple contains a point and its weight.
+  ### Returns:
+  - `tuple`: Coordinates of the center of gravity.
+  ### Exception:
+  - `ValueError`: Raised when the weighted_cluster list is empty.
   """
   if not weighted_cluster:
-    raise ValueError("The weighted_cluster dictionary is empty.")
-  
-  # Remove points with negative weights
-  weighted_cluster = {point: weight for point, weight in weighted_cluster.items() if weight > 0}
+    raise ValueError("The weighted_cluster list is empty.")
+  print(f"center_of_gravity({weighted_cluster})")
+  cluster: list[tuple] = [(scaling(point[0], point[1])) for point in weighted_cluster if point[1] > 0]
+  return center(cluster)
 
-  total_weight = sum(weighted_cluster.values())
-  if total_weight == 0:
-    raise ZeroDivisionError("Total weight in the cluster is zero. Cannot calculate center of gravity.")
-
-  center_coordinates = [0] * len(next(iter(weighted_cluster.keys())))
-  for point, weight in weighted_cluster.items():
-    for i, coordinate in enumerate(point):
-      center_coordinates[i] += coordinate * (weight / total_weight)
-
-  return tuple(center_coordinates)
-
-def weight(cluster: set[tuple], point: tuple, limit: float | int) -> float:
+def weight(cluster: tuple[tuple], point: tuple, limit: float | int) -> float:
   """Calculate the weight of a point within a cluster based on virtual point weights.
-
-  This function calculates the weight of a given point within a cluster. The weight is determined based on the virtual
-  point weights generated from the distances between the given point and other points in the cluster.
-
-  ### Parameters
-  - `cluster` (set[tuple]): The set of points representing a cluster.
-  - `point` (tuple): The coordinates of the point for which the weight is calculated.
-  - `limit` (float | int): The distance limit used in the virtual point weight calculation.
-
-  ### Returns
-  - `float`: The calculated weight of the point within the cluster.
+  ### Parameters:
+  - `cluster` (tuple[tuple]): Cluster of points.
+  - `point` (tuple): Point for which weight is calculated.
+  - `limit` (float | int): Limit for virtual point calculations.
+  ### Returns:
+  - `float`: Weight of the point within the cluster.
   """
-  return sum([Object.VirtualPoint(point, point_i, limit).weight for point_i in cluster.difference((point,))]) / len(cluster)
+  return sum([Object.VirtualPoint(point, point_i, limit).weight for point_i in cluster if point_i != point]) / len(cluster)
 
-def cluster_centers(clusters: list[set[tuple]]) -> list[tuple[tuple]]:
- return [center(cluster) for cluster in clusters if cluster]
+def cluster_centers(clusters: list[tuple[tuple]]) -> list[tuple]:
+  """Calculate the center coordinates of multiple clusters.
+  ### Parameters:
+  - `clusters` (list[tuple[tuple]]): List of clusters, where each cluster is a tuple of points.
+  ### Returns:
+  - `list[tuple]`: List of coordinates representing the center of each cluster.
+  """
+  return [center(cluster) for cluster in clusters if cluster]
 
-def cluster_centers_of_gravity(clusters: list[set[tuple]]) -> list[tuple[tuple]]:
- return [center_of_gravity(cluster) for cluster in clusters if cluster]
+def cluster_centers_of_gravity(clusters: list[tuple[tuple, float]]) -> list[tuple]:
+  """Calculate the center of gravity coordinates for multiple clusters with weights.
+  ### Parameters:
+  - `clusters` (list[tuple[tuple, float]]): List of clusters, where each cluster is a tuple of points and weights.
+  ### Returns:
+  - `list[tuple]`: List of coordinates representing the center of gravity of each cluster.
+  """
+  return [center_of_gravity(cluster) for cluster in clusters if len(cluster) > 0]

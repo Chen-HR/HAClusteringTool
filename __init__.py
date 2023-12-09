@@ -1,353 +1,460 @@
 """
-# Integration
-
+# HAClusteringTool
 ## Overview
 
-The "Integration" package provides a collection of functions for clustering and pairing operations based on distance limits and weighted virtual points. The functions support both source points (V1 algorithm) and virtual points (V2 algorithm), offering flexibility in clustering strategies.
-
-## Functions
-
-### `clustering`
-
-```python
-def clustering(points: list[tuple], limit: float | int, useVirtualPoints: bool = False, scaling: float | int = 0.8, useSource: bool = True, returnVirtualPoint: bool = False, withWeight: bool = False, weight = None) -> list[set[VirtualPoint | tuple]]:
-```
-
-### `pairing`
-
-```python
-def pairing(clusters: list[set[tuple]], limit: float | int, useVirtualPoints: bool = False, scaling: float | int = 0.8, useSource: bool = True, withWeight: bool = False, weight = None) -> list[tuple[set[tuple], list[int]]]:
-```
-
-### Other Clustering Functions
-
-Several other functions are available for specific clustering scenarios, including variations of the V1 and V2 algorithms, as well as functions for calculating distances, centers, weights, and merging associated clusters.
-
-## Notes
-
-- Ensure that the required dependencies, such as `numpy`, are installed for proper functioning.
-- Review the provided example usage for better understanding and application in specific scenarios.
-
----
-
-Feel free to customize the documentation further based on additional details or specific use cases for your functions.
 """
-
-import numpy
+# %%
+import numpy # Version: 1.26.0
 
 try:
+  from . import Object
+  from . import Calculator
+except ImportError:
   import Object
   import Calculator
-except ModuleNotFoundError:
-  from HAClusteringTool import Object
-  from HAClusteringTool import Calculator
-  __all__ = ["Object", "Calculator"]
-  version = 1.0
 
-def merge_associated_clusters(clusters: list[set]) -> list[set]: 
-  """Merges associated clusters within a list of sets.
+__all__ = ["Object", "Calculator"]
+version = 1.1
 
-  ### Parameters
-  - `clusters` (list[set]): A list of sets representing clusters.
+if __name__ == '__main__':
+  import matplotlib.pyplot # Version: 3.8.1
 
-  ### Returns
-  - `list[set]`: A list of sets with associated clusters merged.
-  """
-  merged = True
-  while merged:
-    merged = False
-    for i in range(len(clusters)):
-      for j in range(i+1, len(clusters)):
-        if not clusters[i].isdisjoint(clusters[j]):
-          clusters[i] |= clusters.pop(j)
-          merged = True
-          break
-      if merged: break
-  return clusters
-
-def clustering_V1_universal(points: list, rule, associated: list[tuple[tuple]] | None = None) -> list[set]:
-  """Perform universal clustering on a list of points based on a given clustering rule.
-
-  This algorithm performs universal clustering on a list of points based on a given clustering rule. It allows for
-  the specification of an initial set of associated clusters or creates one if not provided. The algorithm iterates
-  through all pairs of points and merges clusters if they satisfy the provided clustering rule. Finally, the 
-  associated clusters are merged using the 'merge_associated_clusters' method.
-
-  Ensure that the length of 'points' and 'associated' lists is the same. The clustering rule should be a boolean
-  function determining whether two points should be clustered together.
-
+# %%
+def clustering_template(points: list, rule, associated: list[tuple[tuple]] | None = None) -> list[tuple]:
+  """Generic template for "Hierarchical Aggregation Clustering" using "Single Linkage Agglomerative Algorithm"
   ### Parameters
   - `points` (list): A list of points represented as tuples.
-  - `rule` (_type_): A clustering rule that defines whether two points should be grouped together. Should be a boolean function, which receives two points (p1, p2), as `lambda p1, p2: ......`.
-  - as`sociated (list[tuple[tuple]] | None, optional): A list of associated clusters. Default is None.
-
+  - `rule` (callable): A clustering rule that defines whether two points should be grouped together.
+                       Should be a boolean function, which receives two points (p1, p2), as `lambda p1, p2: ......`.
+  - `associated` (list[tuple[tuple]] | None, optional): A list of associated clusters. Default is None.
   ### Exception
   - `ValueError`: If the length of 'points' and 'associated' lists are not the same.
-
   ### Returns
   - `list[set]`: A list of clusters, where each cluster is represented as a set of tuples.
-
-  ### Example Usage
-  ```python
-  # Example Usage
-  points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
-  rule = lambda p1, p2: abs(p1[0] - p2[0]) <= 1 and abs(p1[1] - p2[1]) <= 1
-  clusters = V1_universal(points, rule)
-  ```
   """
   # 1. Create a list of associated clusters from `points` if `associated` is not provided
   if associated is None: 
     associated = [tuple((point, )) for point in points]
-
   # 2. Throw an exception `ValueError` if the length of 'points' and 'associated' lists are not the same.
   if len(points) != len(associated): 
     raise ValueError("points and associated must be the same length")
-
   # 3. Iterate over all point pairs to build clusters based on the provided clustering rules.
-  clusters: list[set] = [set(associated[i]) | set(associated[j]) for i in range(len(points)) for j in range(i+1, len(points)) if rule(points[i], points[j])]
+  clusters: list[set] = [set(associated[i]) | set(associated[j]) 
+                          for i in range(len(points)) 
+                            for j in range(i+1, len(points)) 
+                              if rule(points[i], points[j])]
+  # 4. Merge associated clusters using the 'Calculator.merge_associated_clusters' method, and return its result.
+  return [tuple(s) for s in Calculator.merge_associated_clusters(clusters)]
 
-  # 4. Merge associated clusters using the 'merge_associated_clusters' method, and return it result.
-  return merge_associated_clusters(clusters)
-
-def clustering_V1(points: list[tuple], limit: float | int) -> list[set[tuple]]:
-  """Perform clustering on a list of points based on a distance limit.
-
-  This method performs clustering on a list of points based on a given distance limit. It uses the Euclidean distance
-  between points to determine whether two points should be grouped together. The clusters are formed by iterating
-  through all pairs of points and merging clusters if the distance between them is less than the provided limit.
-  Finally, the associated clusters are merged using the 'merge_associated_clusters' method.
-
+def clustering_useSource(points: list[tuple], limit: float | int) -> list[tuple]:
+  """Perform clustering based on source points within a specified limit.
   ### Parameters
-  - `points` (list[tuple]): A list of points represented as tuples.
-  - `limit` (float | int): The distance limit to form clusters. Points within this distance will be grouped together.
-
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
   ### Returns
-  - `list[set[tuple]]`: A list of clusters, where each cluster is represented as a set of tuples.
-
-  ### Example Usage
-  ```python
-  # Example Usage
-  points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
-  limit = 1.5
-  clusters = V1(points, limit)
-  ```
+  - `list[set[tuple]]`: List of clusters where each cluster is represented as a set of tuples.
   """
-  return clustering_V1_universal(points, lambda point1, point2: Calculator.distance(point1, point2) < limit)
-
-def clustering_V2_1(points: list[tuple], limit: float | int, scaling: float | int = 0.8, returnVirtualPoint: bool = False) -> list[set[Object.VirtualPoint | tuple]]:
-  """Perform clustering on a list of points based on weighted virtual points with a distance limit.
-
-  This method extends the V1 algorithm by introducing weighted virtual points. Each pair of points generates a virtual
-  point with a weight based on the distance between the original points. Clustering is performed on these virtual points
-  using the provided clustering rule. The resulting clusters are then merged based on the 'merge_associated_clusters'
-  method.
-
+  return clustering_template(points, 
+                             lambda point1, point2: Calculator.distance(point1, point2) < limit)
+def clustering_useSource_centers(points: list[tuple], limit: float | int) -> list[set[tuple]]:
+  """Calculate the center coordinates of clusters based on source points within a specified limit.
   ### Parameters
-  - `points` (list[tuple]): A list of points represented as tuples.
-  - `limit` (float | int): The distance limit to form clusters. Points within this distance will be grouped together.
-  - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
-  - `returnVirtualPoint` (bool, optional): If True, return `list[set[VirtualPoint]]`; if False, return `list[set[tuple]]`. Default is False.
-
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
   ### Returns
-  - `list[set[VirtualPoint | tuple]]`: A list of clusters, where each cluster is represented as a set of VirtualPoint.
-
-  ### Example Usage
-  ```python
-  # Example Usage
-  points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
-  limit = 1.5
-  clusters = V2_1(points, limit)
-  ```
+  - `list[set[tuple]]`: List of cluster centers.
   """
-  if returnVirtualPoint:
-    # Generate weighted virtual points
-    virtualPoints: list[Object.VirtualPoint] = [Object.VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i + 1, len(points))]
-    # Generate and return virtual point clusters using existing virtual points as reference targets
-    return clustering_V1_universal(virtualPoints, lambda point1, point2: point1.weight > 0 and point2.weight > 0 and Calculator.distance(point1.point, point2.point) < scaling * limit)
-  else:
-    # Generate weighted virtual points
-    virtualPoints: list[tuple] = [virtualPoint.point for virtualPoint in [Object.VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i + 1, len(points))] if virtualPoint.weight > 0]
-    # Generate and return virtual point clusters using existing virtual points as reference targets
-    return clustering_V1(virtualPoints, scaling * limit)
+  return Calculator.cluster_centers(clustering_useSource(points, limit))
 
-def clustering_V2_2(points: list[tuple], limit: float | int, scaling: float | int = 0.8, withWeight: bool = False, weight = None) -> list[set[tuple] | dict[tuple, float]]:
-  """Perform clustering on a list of points based on weighted virtual points with a distance limit, and return source clusters.
-
-  This method extends the V1 algorithm by introducing weighted virtual points. Each pair of points generates a virtual
-  point with a weight based on the distance between the original points. Clustering is performed on these virtual points
-  using the provided clustering rule. The resulting clusters are then merged based on the 'merge_associated_clusters'
-  method. This method returns the source clusters of the virtual points.
-
+def clustering_useVirtual_associateSource(points: list[tuple], limit: float | int, withWeight: bool = False, virtualWeight = None, sourceWeight = None) -> list[tuple[tuple]]:
+  """Perform clustering using virtual points associated with source points within a specified limit.
   ### Parameters
-  - `points` (list[tuple]): A list of points represented as tuples.
-  - `limit` (float | int): The distance limit to form clusters. Points within this distance will be grouped together.
-  - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
-  - `withWeight` (bool, optional): If True, include weights in the result; if False, return source clusters without weights. Default is False.
-  - `weight` (callable, optional): A function for calculating weights. If None, use the default `Calculator.weight` function.
-
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
+  - `withWeight` (bool, optional): Whether to consider weights. Default is False.
+  - `virtualWeight`: Custom formula for virtual point weighting. Default is None.
+  - `sourceWeight`: Custom formula for source point weighting. Default is None.
   ### Returns
-  - `list[set[tuple]]`: A list of clusters, where each cluster is represented as a set of tuples. Each tuple in a cluster represents the source points of a virtual point.
-    If `withWeight` is True, the result is a list of dictionaries, where each dictionary represents a cluster with point weights.
-
-  ### Example Usage
-  ```python
-  # Example Usage
-  points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
-  limit = 1.5
-  source_clusters = V2_2(points, limit)
-  ```
+  - `list[tuple[tuple]]`: List of clustered points.
   """
+  virtualWeight = Object.VirtualPoint.formula if virtualWeight is None else virtualWeight
   # Generate weighted virtual points
-  virtualPoints: list[Object.VirtualPoint] = [Object.VirtualPoint(points[i], points[j], limit) for i in range(len(points)) for j in range(i + 1, len(points))]
-  # Generate and return virtual point source clusters using existing virtual points as reference targets
-  clusters = clustering_V1_universal(virtualPoints, lambda point1, point2: point1.weight > 0 and point2.weight > 0 and Calculator.distance(point1.point, point2.point) < scaling * limit, [virtualPoint.sources for virtualPoint in virtualPoints])
+  virtualPoints_listVirtualPoint: list[Object.VirtualPoint] = [Object.VirtualPoint(points[i], points[j], limit, virtualWeight) 
+                                                for i in range(len(points)) 
+                                                  for j in range(i + 1, len(points)) 
+                                                    # if Calculator.distance(points[i], points[j]) > limit
+                                                    ]
+  
+  virtualPoints = [virtualPoint for virtualPoint in virtualPoints_listVirtualPoint if virtualPoint.weight > 0]
+  # Generate virtual point source clusters using existing virtual points as reference targets
+  clusters: list[tuple] = clustering_template(virtualPoints, lambda point1, point2: point1.weight > 0 and point2.weight > 0 and Calculator.distance(point1.point, point2.point) < limit, [virtualPoint.sources for virtualPoint in virtualPoints])
+  # Adjust output format
   if withWeight:
-    if weight is None:
-      weight = Calculator.weight
-    clusters = [{point: weight(cluster, point, scaling * limit) for point in cluster} for cluster in clusters]
+    sourceWeight = Calculator.weight if sourceWeight is None else sourceWeight
+    clusters = [tuple((point, sourceWeight(cluster, point, limit)) for point in cluster) for cluster in clusters]
   return clusters
-
-def clustering_V2(points: list[tuple], limit: float | int, scaling: float | int = 0.8, useSource: bool = True, returnVirtualPoint: bool = False, withWeight: bool = False, weight = None) -> list[set[Object.VirtualPoint | tuple]]:
-  """Perform clustering on a list of points based on weighted virtual points with a distance limit.
-
-  This method extends the V1 algorithm by introducing weighted virtual points. Each pair of points generates a virtual
-  point with a weight based on the distance between the original points. Clustering is performed on these virtual points
-  using the provided clustering rule. The resulting clusters are then merged based on the 'merge_associated_clusters'
-  method. This method returns either the virtual point clusters or the source clusters of the virtual points based on the
-  'useSource' parameter.
-
+def clustering_useVirtual_associateSource_centers(points: list[tuple], limit: float | int, withWeight: bool = False, virtualWeight = None, sourceWeight = None) -> list[tuple]:
+  """Calculate the center coordinates of clusters based on virtual points associated with source points within a specified limit.
   ### Parameters
-  - `points` (list[tuple]): A list of points represented as tuples.
-  - `limit` (float | int): The distance limit to form clusters. Points within this distance will be grouped together.
-  - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
-  - `useSource` (bool, optional): If True, return source clusters (like `V2_2`); if False, return virtual point clusters (like `V2_1`). Default is True.
-  - `returnVirtualPoint` (bool, optional): If True, return `list[set[VirtualPoint]]`; if False, return `list[set[tuple]]`. Default is False.
-  - `withWeight` (bool, optional): If True, include weights in the result; if False, return clusters without weights. Default is False.
-  - `weight` (callable, optional): A function for calculating weights. If None, use the default `Calculator.weight` function.
-
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
+  - `withWeight` (bool, optional): Whether to consider weights. Default is False.
+  - `virtualWeight`: Custom formula for virtual point weighting. Default is None.
+  - `sourceWeight`: Custom formula for source point weighting. Default is None.
   ### Returns
-  - `list[set[VirtualPoint | tuple]]`: A list of clusters, where each cluster is represented as a set of `tuple` or `VirtualPoint`.
-    It is the parameter "useSource" that determines whether the elements in each cluster are virtual points or source points.
-    The type that determines the data in each virtual point cluster is "returnVirtualPoint".
-    If `withWeight` is True, the result is a list of dictionaries, where each dictionary represents a cluster with point weights.
-
-  ### Example Usage
-  ```python
-  # Example Usage
-  points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
-  limit = 1.5
-  clusters = V2(points, limit)
-  ```
+  - `list[tuple]`: List of cluster centers.
   """
-  if useSource:
-    return clustering_V2_2(points, limit, scaling, withWeight, weight)
+  if withWeight:
+    return Calculator.cluster_centers_of_gravity(clustering_useVirtual_associateSource(points, limit, withWeight=withWeight, virtualWeight=virtualWeight, sourceWeight=sourceWeight))
   else:
-    return clustering_V2_1(points, limit, scaling, returnVirtualPoint)
+    return Calculator.cluster_centers(clustering_useVirtual_associateSource(points, limit, virtualWeight=virtualWeight, sourceWeight=sourceWeight))
 
-def clustering(points: list[tuple], limit: float | int, useVirtualPoints: bool = False, scaling: float | int = 0.8, useSource: bool = True, returnVirtualPoint: bool = False, withWeight: bool = False, weight = None) -> list[set[Object.VirtualPoint | tuple]]:
-  """
-  Perform clustering on a list of points based on either virtual points or source points with a distance limit.
-
-  This method allows clustering based on either the V1 algorithm (using source points) or the V2 algorithm
-  (introducing weighted virtual points). The choice is determined by the 'useVirtualPoints' parameter.
-
+def clustering_useVirtual_associateVirtual(points: list[tuple], limit: float | int, withWeight: bool = False, virtualWeight = None) -> list[tuple[tuple]]:
+  """Perform clustering using virtual points associated with virtual points within a specified limit.
   ### Parameters
-  - `points` (list[tuple]): A list of points represented as tuples.
-  - `limit` (float | int): The distance limit to form clusters. Points within this distance will be grouped together.
-  - `useVirtualPoints` (bool, optional): If True, use V2 algorithm with virtual points; if False, use V1 algorithm with source points. Default is False.
-  - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
-  - `useSource` (bool, optional): If True, return source clusters; if False, return virtual point clusters. Default is True.
-  - `returnVirtualPoint` (bool, optional): If True, return `list[set[VirtualPoint]]` in the result; if False, return `list[set[tuple]]`. Applicable when using virtual points. Default is False.
-  - `withWeight` (bool, optional): If True, include weights in the result; if False, return clusters without weights. Default is False.
-  - `weight` (callable, optional): A function for calculating weights. If None, use the default `Calculator.weight` function.
-
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
+  - `withWeight` (bool, optional): Whether to consider weights. Default is False.
+  - `virtualWeight`: Custom formula for virtual point weighting. Default is None.
   ### Returns
-  - `list[set[VirtualPoint | tuple]]`: A list of clusters, where each cluster is represented as a set of `tuple` or `VirtualPoint`.
-    The type that determines the data in each virtual point cluster is 'useSource' and 'returnVirtualPoint' parameters.
-    If 'withWeight' is True, the result is a list of dictionaries, where each dictionary represents a cluster with point weights.
-
-  ### Example Usage
-  ```python
-  # Example Usage
-  points = [(0, 0), (1, 1), (2, 2), (5, 5), (6, 6)]
-  limit = 1.5
-  clusters = clustering(points, limit, useVirtualPoints=True, useSource=False, returnVirtualPoint=True, withWeight=True)
-  ```
+  - `list[tuple[tuple]]`: List of clustered points.
   """
-  if useVirtualPoints:
-    return clustering_V2(points, limit, scaling, useSource, returnVirtualPoint, withWeight, weight)
+  virtualWeight = Object.VirtualPoint.formula if virtualWeight is None else virtualWeight
+  # Generate weighted virtual points
+  virtualPoints_listVirtualPoint: list[Object.VirtualPoint] = [Object.VirtualPoint(points[i], points[j], limit, virtualWeight) 
+                                                for i in range(len(points)) 
+                                                  for j in range(i + 1, len(points)) 
+                                                    # if Calculator.distance(points[i], points[j]) > limit
+                                                    ]
+  virtualPoints = [virtualPoint for virtualPoint in virtualPoints_listVirtualPoint if virtualPoint.weight>0]
+  # Generate virtual point clusters using existing virtual points as reference targets
+  clusters: list[tuple[Object.VirtualPoint]] = clustering_template(virtualPoints, lambda point1, point2: point1.weight > 0 and point2.weight > 0 and Calculator.distance(point1.point, point2.point) < limit)
+  # Adjust output format
+  if withWeight:
+    return [tuple((point.point, point.weight) for point in cluster) for cluster in clusters]
   else:
-    return clustering_V1(points, limit)
-
-def pairing(clusters: list[set[tuple]], limit: float | int, withSource: bool = False, useVirtualPoints: bool = False, scaling: float | int = 0.8, useSource: bool = True, withWeight: bool = False, weight = None) -> list[set[tuple]] | list[tuple[set[tuple], list[int]]]:
-  """Pair clusters based on a distance limit.
-
-  This method pairs clusters from the input list based on a given distance limit. It uses the `clustering` function to form clusters from the union of points in the input clusters. 
-  The pairs are either returned directly or with additional information about the indices of clusters that contributed to each pair.
-
+    return [tuple(point.point for point in cluster) for cluster in clusters]
+def clustering_useVirtual_associateVirtual_centers(points: list[tuple], limit: float | int, withWeight: bool = False, virtualWeight = None, sourceWeight = None) -> list[tuple]:
+  """Calculate the center coordinates of clusters based on virtual points associated with virtual points within a specified limit.
   ### Parameters
-  - `clusters` (list[set[tuple]]): A list of clusters to pair.
-  - `limit` (float | int): The distance limit to form pairs. Clusters within this distance will be paired together.
-  - `withSource` (bool, optional): If True, return pairs with source cluster indices; if False, return pairs without source cluster indices. Default is False.
-  - `useVirtualPoints` (bool, optional): If True, use V2 algorithm with virtual points; if False, use V1 algorithm with source points. Default is False.
-  - `scaling` (float | int, optional): Scaling factor for the distance limit when comparing virtual points. Default is 0.8.
-  - `useSource` (bool, optional): If True, use source clusters in pairing; if False, use virtual point clusters. Default is True.
-  - `withWeight` (bool, optional): If True, include weights in the result; if False, return pairs without weights. Default is False.
-  - `weight` (callable, optional): A function for calculating weights. If None, use the default `Calculator.weight` function.
-
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
+  - `withWeight` (bool, optional): Whether to consider weights. Default is False.
+  - `virtualWeight`: Custom formula for virtual point weighting. Default is None.
+  - `sourceWeight`: Custom formula for source point weighting. Default is None.
   ### Returns
-  - `list[set[tuple]]` or `list[tuple[set[tuple], list[int]]]`: A list of pairs, where each pair is represented as a set of tuples. If 'withSource' is True, each pair is accompanied by a list of indices indicating the contributing clusters.
-
-  ### Example Usage
-  ```python
-  # Example Usage
-  clusters = [{(0, 0), (1, 1)}, {(2, 2), (5, 5)}, {(6, 6)}]
-  limit = 2.0
-  paired_clusters = pairing(clusters, limit, useVirtualPoints=True, useSource=False, withWeight=True)
-  ```
+  - `list[tuple]`: List of cluster centers.
   """
-  # Merge clusters into pairs
-  pairs: list[set[tuple]] = clustering(list(set().union(*clusters)), limit, useVirtualPoints=useVirtualPoints, scaling=scaling, useSource=useSource, withWeight=withWeight, weight=weight)
-  if withSource == False:
-    return pairs
+  if withWeight:
+    return Calculator.cluster_centers_of_gravity(clustering_useVirtual_associateVirtual(points, limit, withWeight=withWeight, virtualWeight=virtualWeight))
   else:
+    return Calculator.cluster_centers(clustering_useVirtual_associateVirtual(points, limit, virtualWeight=virtualWeight))
+
+def clustering_useVirtual(points: list[tuple], limit: float | int, associateVirtual: bool = False , withWeight: bool = False, virtualWeight = None, sourceWeight = None) -> list[tuple[tuple]]:
+  """Perform clustering using virtual points within a specified limit.
+  ### Parameters
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
+  - `associateVirtual` (bool, optional): Whether to associate virtual points. Default is False.
+  - `withWeight` (bool, optional): Whether to consider weights. Default is False.
+  - `virtualWeight`: Custom formula for virtual point weighting. Default is None.
+  - `sourceWeight`: Custom formula for source point weighting. Default is None.
+  ### Returns
+  - `list[tuple[tuple]]`: List of clustered points.
+  """
+  if associateVirtual:
+    return clustering_useVirtual_associateVirtual(points, limit, withWeight=withWeight, virtualWeight=virtualWeight)
+  else:
+    return clustering_useVirtual_associateSource(points, limit, withWeight=withWeight, virtualWeight=virtualWeight, sourceWeight=sourceWeight)
+def clustering_useVirtual_centers(points: list[tuple], limit: float | int, associateVirtual: bool = False , withWeight: bool = False, virtualWeight = None, sourceWeight = None) -> list[tuple]:
+  """Calculate the center coordinates of clusters based on virtual points within a specified limit.
+  ### Parameters
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
+  - `associateVirtual` (bool, optional): Whether to associate virtual points. Default is False.
+  - `withWeight` (bool, optional): Whether to consider weights. Default is False.
+  - `virtualWeight`: Custom formula for virtual point weighting. Default is None.
+  - `sourceWeight`: Custom formula for source point weighting. Default is None.
+  ### Returns
+  - `list[tuple]`: List of cluster centers.
+  """
+  if associateVirtual:
+    return clustering_useVirtual_associateVirtual_centers(points, limit, withWeight=withWeight, virtualWeight=virtualWeight)
+  else:
+    return clustering_useVirtual_associateSource_centers(points, limit, withWeight=withWeight, virtualWeight=virtualWeight, sourceWeight=sourceWeight)
+
+def clustering(points: list[tuple], limit: float | int, useVirtual: bool = False, associateVirtual: bool = False , withWeight: bool = False, virtualWeight = None, sourceWeight = None) -> list[tuple[tuple]]:
+  """Perform clustering based on specified parameters.
+  ### Parameters
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
+  - `useVirtual` (bool, optional): Whether to use virtual points. Default is False.
+  - `associateVirtual` (bool, optional): Whether to associate virtual points. Default is False.
+  - `withWeight` (bool, optional): Whether to consider weights. Default is False.
+  - `virtualWeight`: Custom formula for virtual point weighting. Default is None.
+  - `sourceWeight`: Custom formula for source point weighting. Default is None.
+  ### Returns
+  - `list[tuple[tuple]]`: List of clustered points.
+  """
+  if useVirtual:
+    return clustering_useVirtual(points, limit, associateVirtual=associateVirtual, withWeight=withWeight, virtualWeight=virtualWeight, sourceWeight=sourceWeight)
+  else:
+    return clustering_useSource(points, limit)
+def clustering_centers(points: list[tuple], limit: float | int, useVirtual: bool = False, associateVirtual: bool = False , withWeight: bool = False, virtualWeight = None, sourceWeight = None) -> list[tuple]:
+  """Calculate the center coordinates of clusters based on specified parameters.
+  ### Parameters
+  - `points` (list[tuple]): List of source points.
+  - `limit` (float | int): Limit for clustering.
+  - `useVirtual` (bool, optional): Whether to use virtual points. Default is False.
+  - `associateVirtual` (bool, optional): Whether to associate virtual points. Default is False.
+  - `withWeight` (bool, optional): Whether to consider weights. Default is False.
+  - `virtualWeight`: Custom formula for virtual point weighting. Default is None.
+  - `sourceWeight`: Custom formula for source point weighting. Default is None.
+  ### Returns
+  - `list[tuple]`: List of cluster centers.
+  """
+  if useVirtual:
+    return clustering_useVirtual_centers(points, limit, associateVirtual=associateVirtual, withWeight=withWeight, virtualWeight=virtualWeight, sourceWeight=sourceWeight)
+  else:
+    return clustering_useSource_centers(points, limit)
+
+def pairing(clusters: list[set[tuple]], limit: float | int, withSource: bool = False, useVirtual: bool = False, associateVirtual: bool = False , withWeight: bool = False, virtualWeight = None, sourceWeight = None):
+  """Perform pairing of clusters and return the results.
+  ### Parameters
+  - `clusters` (list[set[tuple]]): List of clusters.
+  - `limit` (float | int): Limit for clustering.
+  - `withSource` (bool, optional): Whether to include source points in the result. Default is False.
+  - `useVirtual` (bool, optional): Whether to use virtual points. Default is False.
+  - `associateVirtual` (bool, optional): Whether to associate virtual points. Default is False.
+  - `withWeight` (bool, optional): Whether to consider weights. Default is False.
+  - `virtualWeight`: Custom formula for virtual point weighting. Default is None.
+  - `sourceWeight`: Custom formula for source point weighting. Default is None.
+  ### Returns
+  - `list[tuple]`: List of paired clusters.
+  """
+  # Merge clusters into groups
+  groups: list[tuple[tuple]] = clustering(list(set().union(*clusters)), limit, useVirtual, associateVirtual, withWeight, virtualWeight, sourceWeight)
+  if withSource:
     # Find the indices of clusters that contributed to each pair
-    pairs_from: list[list[int]] = [[j for j in range(len(clusters)) if not pairs[i].isdisjoint(clusters[j])] for i in range(len(pairs))]
-    return [(pairs[i], pairs_from[i]) for i in range(len(pairs))]
+    group_from: list[tuple[int]] = [(j for j in range(len(clusters)) if groups[i] in clusters[j]) for i in range(len(groups))]
+    return [(groups[i], group_from[i]) for i in range(len(groups))]
+  return groups
 
-
+# %%
 if __name__ == "__main__":
-  # Example usage
-  dispersion = 10
-  size = 1000
-  concentrated = 10
-  concentrated_distance = 2
+  import time
+  class Timer:
+    """Simple timer class to measure elapsed time."""
+    def __init__(self):
+      self.starttime = 0.0
+    def start(self):
+      """Start the timer."""
+      self.starttime = time.time()
+    def now(self):
+      """Get the elapsed time since starting the timer."""
+      return time.time() - self.starttime
+  timer = Timer()
 
-  point_list = [tuple(point) for point in list(numpy.transpose([numpy.random.uniform(-size, size, dispersion), numpy.random.uniform(-size, size, dispersion), numpy.random.uniform(-size, size, dispersion)])) + list(numpy.random.uniform(-size, size, 3) + numpy.transpose([numpy.random.uniform(-concentrated_distance, concentrated_distance, concentrated), numpy.random.uniform(-concentrated_distance, concentrated_distance, concentrated), numpy.random.uniform(-concentrated_distance, concentrated_distance, concentrated)]))]
-  distance_limitation_coefficient = concentrated_distance
-  cluster: list[list[tuple]] = []
+  def points_listTuple(points_numpyArray: numpy.array) -> list[tuple]:
+    """Convert a NumPy array of points to a list of tuples.
+    ### Parameters
+    - `points_numpyArray` (numpy.array): NumPy array representing points.
+    ### Returns
+    - `list[tuple]`: List of tuples representing points.
+    """
+    return [tuple(point_numpyArray) for point_numpyArray in points_numpyArray]
+  def noise_generator(dimension: int, min: int, max: int, size: int) -> numpy.array:
+    """Generate a NumPy array of random noise points.
+    ### Parameters
+    - `dimension` (int): Dimensionality of the points.
+    - `min` (int): Minimum value for each coordinate.
+    - `max` (int): Maximum value for each coordinate.
+    - `size` (int): Number of noise points to generate.
+    ### Returns
+    - `numpy.array`: Array of random noise points.
+    """
+    return numpy.random.uniform(min, max, dimension*size).reshape((size, dimension))
+  def core_generator(dimension: int, min: int, max: int, size: int, distance: int) -> numpy.array:
+    """Generate a NumPy array of core points with random noise.
+    ### Parameters
+    - `dimension` (int): Dimensionality of the points.
+    - `min` (int): Minimum value for each coordinate.
+    - `max` (int): Maximum value for each coordinate.
+    - `size` (int): Number of core points to generate.
+    - `distance` (int): Maximum distance for random noise.
+    ### Returns
+    - `numpy.array`: Array of core points with random noise.
+    """
+    core = numpy.random.uniform(min, max, dimension)
+    return numpy.array([core + diff for diff in noise_generator(dimension, -distance, distance, size)]) 
+  def testingData_generator(dimension: int, noise_size: int, cores_number: int, core_size: int, core_distance: int, min: int, max: int) -> numpy.array:
+    """Generate testing data with noise and core points.
+    ### Parameters
+    - `dimension` (int): Dimensionality of the points.
+    - `noise_size` (int): Number of noise points.
+    - `cores_number` (int): Number of core groups.
+    - `core_size` (int): Number of points in each core group.
+    - `core_distance` (int): Maximum distance for random noise in core groups.
+    - `min` (int): Minimum value for each coordinate.
+    - `max` (int): Maximum value for each coordinate.
+    ### Returns
+    - `numpy.array`: Array of testing data points.
+    """
+    result: numpy.array = noise_generator(dimension, min, max, noise_size)
+    for _ in range(cores_number): result = numpy.concatenate((result, core_generator(dimension, min, max, core_size, core_distance)), axis=0)
+    return result
+  def testingData_listTuple_generator(dimension: int, noise_size: int, cores_number: int, core_size: int, core_distance: int, min: int, max: int) -> list[tuple]:
+    """Generate testing data with noise and core points as a list of tuples.
+    ### Parameters
+    - `dimension` (int): Dimensionality of the points.
+    - `noise_size` (int): Number of noise points.
+    - `cores_number` (int): Number of core groups.
+    - `core_size` (int): Number of points in each core group.
+    - `core_distance` (int): Maximum distance for random noise in core groups.
+    - `min` (int): Minimum value for each coordinate.
+    - `max` (int): Maximum value for each coordinate.
+    ### Returns
+    - `list[tuple]`: List of testing data points represented as tuples.
+    """
+    return points_listTuple(testingData_generator(dimension, noise_size, cores_number, core_size, core_distance, min, max))
+  
+  def Demo_All_V1(points_list: list[tuple], clustering_radius: int | float):
+    """Demonstrate the usage of clustering functions and display results.
+    ### Parameters
+    - `points_list` (list[tuple]): List of points.
+    - `clustering_radius` (int | float): Radius for clustering.
+    """
+    cluster: list[list[tuple]] = []
+    print("points_list:", points_list)
+    print()
+    
+    print("clustering_useSource: ")
+    timer.start()
+    # print("  Cluster:", clustering_useSource(points_list, clustering_radius))
+    print("  Cluster Centers (clustering_V1  ):", clustering_useSource_centers(points_list, clustering_radius))
+    print("  Cluster Centers (clustering     ):", clustering_centers(points_list, clustering_radius))
+    print(f"  Clustering used {timer.now()} secend")
+    cluster.append(clustering_useSource_centers(points_list, clustering_radius))
+    
+    print("clustering_useVirtual_associateSource: ")
+    timer.start()
+    # print("  Cluster:", clustering_useVirtual_associateSource(points_list, clustering_radius))
+    print("  Cluster Centers (clustering_V2_1):", clustering_useVirtual_associateSource_centers(points_list, clustering_radius))
+    print("  Cluster Centers (clustering_V2  ):", clustering_useVirtual_centers(points_list, clustering_radius))
+    print("  Cluster Centers (clustering     ):", clustering_centers(points_list, clustering_radius, useVirtual=True))
+    print(f"  Clustering used {timer.now()} secend")
+    cluster.append(clustering_useVirtual_associateSource_centers(points_list, clustering_radius))
+    print("clustering_useVirtual_associateSource_withWeight: ")
+    timer.start()
+    # print("  Cluster:", clustering_useVirtual_associateSource(points_list, clustering_radius, withWeight=True))
+    print("  Cluster Centers (clustering_V2_1):", clustering_useVirtual_associateSource_centers(points_list, clustering_radius, withWeight=True))
+    print("  Cluster Centers (clustering_V2  ):", clustering_useVirtual_centers(points_list, clustering_radius, withWeight=True))
+    print("  Cluster Centers (clustering     ):", clustering_centers(points_list, clustering_radius, useVirtual=True, withWeight=True))
+    print(f"  Clustering used {timer.now()} secend")
+    cluster.append(clustering_useVirtual_associateSource_centers(points_list, clustering_radius, withWeight=True))
 
-  print("point_list:", point_list)
-  print()
-  print("clustering_V1: ")
-  print("  Cluster Centers (clustering_V1  ):", Calculator.cluster_centers(clustering_V1(point_list, distance_limitation_coefficient)))
-  print("  Cluster Centers (clustering     ):", Calculator.cluster_centers(clustering(point_list, distance_limitation_coefficient, useVirtualPoints=False)))
-  cluster.append(Calculator.cluster_centers(clustering(point_list, distance_limitation_coefficient, useVirtualPoints=False)))
-  print("clustering_V2_1: ")
-  print("  Cluster Centers (clustering_V2_1):", Calculator.cluster_centers(clustering_V2_1(point_list, distance_limitation_coefficient, returnVirtualPoint=False)))
-  print("  Cluster Centers (clustering_V2  ):", Calculator.cluster_centers(clustering_V2(point_list, distance_limitation_coefficient, useSource=False, returnVirtualPoint=False)))
-  print("  Cluster Centers (clustering     ):", Calculator.cluster_centers(clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=False, returnVirtualPoint=False)))
-  cluster.append(Calculator.cluster_centers(clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=False, returnVirtualPoint=False)))
-  print("clustering_V2_2: ")
-  print("  Cluster Centers (clustering_V2_2):", Calculator.cluster_centers(clustering_V2_2(point_list, distance_limitation_coefficient)))
-  print("  Cluster Centers (clustering_V2  ):", Calculator.cluster_centers(clustering_V2(point_list, distance_limitation_coefficient, useSource=True)))
-  print("  Cluster Centers (clustering     ):", Calculator.cluster_centers(clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True)))
-  cluster.append(Calculator.cluster_centers(clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True)))
-  print("clustering_V2_2: ")
-  print("  Cluster Centers (clustering_V2_2):", Calculator.cluster_centers_of_gravity(clustering_V2_2(point_list, distance_limitation_coefficient, withWeight=True)))
-  print("  Cluster Centers (clustering_V2  ):", Calculator.cluster_centers_of_gravity(clustering_V2(point_list, distance_limitation_coefficient, useSource=True, withWeight=True)))
-  print("  Cluster Centers (clustering     ):", Calculator.cluster_centers_of_gravity(clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True, withWeight=True)))
-  cluster.append(Calculator.cluster_centers_of_gravity(clustering(point_list, distance_limitation_coefficient, useVirtualPoints=True, useSource=True, withWeight=True)))
-  print()
-  print("cluster:", cluster)
-  print("pairing:", pairing(cluster, distance_limitation_coefficient, True))
+    print("clustering_useVirtual_associateVirtual: ")
+    timer.start()
+    # print("  Cluster:", clustering_useVirtual_associateVirtual(points_list, clustering_radius))
+    print("  Cluster Centers (clustering_V2_1):", clustering_useVirtual_associateVirtual_centers(points_list, clustering_radius))
+    print("  Cluster Centers (clustering_V2  ):", clustering_useVirtual_centers(points_list, clustering_radius, associateVirtual=True))
+    print("  Cluster Centers (clustering     ):", clustering_centers(points_list, clustering_radius, useVirtual=True, associateVirtual=True))
+    print(f"  Clustering used {timer.now()} secend")
+    cluster.append(clustering_useVirtual_associateVirtual_centers(points_list, clustering_radius))
+    print("clustering_useVirtual_associateVirtual_withWeight: ")
+    timer.start()
+    # print("  Cluster:", clustering_useVirtual_associateVirtual(points_list, clustering_radius, withWeight=True))
+    print("  Cluster Centers (clustering_V2_1):", clustering_useVirtual_associateVirtual_centers(points_list, clustering_radius, withWeight=True))
+    print("  Cluster Centers (clustering_V2  ):", clustering_useVirtual_centers(points_list, clustering_radius, associateVirtual=True, withWeight=True))
+    print("  Cluster Centers (clustering     ):", clustering_centers(points_list, clustering_radius, useVirtual=True, associateVirtual=True, withWeight=True))
+    print(f"  Clustering used {timer.now()} secend")
+    cluster.append(clustering_useVirtual_associateVirtual_centers(points_list, clustering_radius, withWeight=True))
+    
+    print("cluster:", cluster)
+    timer.start()
+    print("pairing:", pairing(cluster, clustering_radius))
+    print(f"  Clustering used {timer.now()} secend")
+  def Demo_MatplotlibPlot_V1(points_list: list[tuple], clustering_radius: int | float, size_min: int | float, size_max: int | float):
+    """Demonstrate the usage of clustering functions and visualize results using Matplotlib.
+    ### Parameters
+    - `points_list` (list[tuple]): List of points.
+    - `clustering_radius` (int | float): Radius for clustering.
+    - `size_min` (int | float): Minimum size for plotting.
+    - `size_max` (int | float): Maximum size for plotting.
+    """
+    source_label = "source point"
+    source_color = "b"
+    source_alpha = 0.2
+    source_radius = clustering_radius/2
+    source_radius_color = source_color
+    source_radius_alpha = 0.1
+
+    virtual_label = "virtual point"
+    virtual_color = "y"
+    virtual_alpha = 0.3
+    virtual_radius = clustering_radius/2
+    virtual_radius_color = virtual_color
+    virtual_radius_alpha = 0.075
+
+    weight_label = "weight point"
+    weight_color = "y"
+    weight_alpha = 0.3
+    weight_radius = clustering_radius/2
+    weight_radius_color = weight_color
+    weight_radius_alpha = 0.05
+
+    figure: matplotlib.pyplot.Figure = matplotlib.pyplot.figure()
+    axes: matplotlib.pyplot.Axes = figure.add_subplot(111)
+    axes.set_title("Clustering simulation")
+    axes.set_xlim(size_min, size_max)
+    axes.set_ylim(size_min, size_max)
+
+    # source point
+    axes.scatter(*list(zip(*points_list)), c=source_color, alpha=source_alpha, label=source_label)
+    [axes.add_patch(matplotlib.pyplot.Circle(point, source_radius, edgecolor=source_radius_color, facecolor=source_radius_color, alpha=source_radius_alpha)) for point in points_list]
+
+    # # weight point
+    # print(f"clustering_useVirtual(points_list, clustering_radius, associateVirtual=False, withWeight=True): {clustering_useVirtual(points_list, clustering_radius, associateVirtual=False, withWeight=False)}")
+    # weightPoints = [point for points in clustering_useVirtual(points_list, clustering_radius, associateVirtual=False) for point in points]
+    # print(f"weightPoint: {weightPoints}")
+    # axes.scatter(*list(zip(*weightPoints)), c=weight_color, alpha=weight_alpha, label=weight_label)
+    # [axes.add_patch(matplotlib.pyplot.Circle(weightPoint, weight_radius, edgecolor=weight_radius_color, facecolor=weight_radius_color, alpha=weight_radius_alpha)) for weightPoint in weightPoints]
+    
+    # virtual point
+    # print(f"clustering_useVirtual(points_list, clustering_radius, associateVirtual=True, withWeight=True): {clustering_useVirtual(points_list, clustering_radius, associateVirtual=True, withWeight=True)}")
+    virtualPoints = [point for points in clustering_useVirtual(points_list, clustering_radius, associateVirtual=True) for point in points]
+    # print(f"virtualPoints: {virtualPoints}")
+    axes.scatter(*list(zip(*virtualPoints)), c=virtual_color, alpha=virtual_alpha, label=virtual_label)
+    [axes.add_patch(matplotlib.pyplot.Circle(virtualPoint, virtual_radius, edgecolor=virtual_radius_color, facecolor=virtual_radius_color, alpha=virtual_radius_alpha)) for virtualPoint in virtualPoints]
+
+    # clustering without virtualPoint
+    axes.scatter(*list(zip(*clustering_useSource_centers(points_list, clustering_radius))), c="r", label="clustering center without virtualPoint")
+    # clustering with virtualPoint
+    axes.scatter(*list(zip(*clustering_useVirtual_centers(points_list, clustering_radius, associateVirtual=True, withWeight=True))), c="g", label="clustering center with virtualPoint")
+
+    axes.grid(True)
+    axes.legend()
+
+    print("matplotlib.pyplot.show()")
+    matplotlib.pyplot.show()
+
+  numpy.random.seed(2023)
+  dimension = 2
+  size_min  = -15
+  size_max  = -size_min
+
+  noise_size = 10
+
+  cores_number = 2
+  core_size     = 5
+  core_distance = 5
+
+  clustering_label = "clustering"
+  clustering_radius = 5
+
+  points_list: list[tuple] = testingData_listTuple_generator(dimension, noise_size, cores_number, core_size, core_distance, size_min, size_max)
+  
+  Demo_All_V1(points_list, clustering_radius)
+  Demo_MatplotlibPlot_V1(points_list, clustering_radius, size_min-core_distance, size_max+core_distance)
+
+# %%
